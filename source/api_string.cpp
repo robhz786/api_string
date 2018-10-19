@@ -3,13 +3,52 @@
 #include <stdexcept>
 	
 namespace speudo_std {
+
+#if defined(API_STRING_TEST_MODE)
+namespace api_string_test {
+
+static std::size_t& allocations_count_ref()
+{
+    static std::size_t count = 0;
+    return count;
+}
+static std::size_t& deallocations_count_ref()
+{
+    static std::size_t count = 0;
+    return count;
+}
+void reset()
+{
+    allocations_count_ref() = 0;
+    deallocations_count_ref() = 0;
+}
+std::size_t allocations_count()
+{
+    return allocations_count_ref();
+}
+std::size_t deallocations_count()
+{
+    return deallocations_count_ref();
+}
+void report_allocation()
+{
+    allocations_count_ref()++;
+}
+void report_deallocation()
+{
+    deallocations_count_ref()++;
+}
+
+} // namespace api_string_test
+
+#endif //defined(API_STRING_TEST_MODE)
+
 namespace private_ {
 
 void throw_std_out_of_range(const char* msg)
 {
     throw std::out_of_range(msg);
 }
-
 
 std::size_t str_length(const char* str)
 {

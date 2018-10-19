@@ -146,8 +146,8 @@ public:
     basic_string(const basic_api_string<Chart>& s,  const Allocator& = Allocator());
     basic_string(basic_api_string<Chart>&& s, const Allocator& = Allocator());
 
-    operator api_string<CharT> () && ;
-    operator api_string<CharT> () const & ;
+    operator basic_api_string<CharT> () && ;
+    operator basic_api_string<CharT> () const & ;
     
     // ... the rest is just like std::basic_string ...
 };
@@ -172,6 +172,13 @@ An example:
 
 ```c++
 union {
+
+    constexpr static std::size_t sso_capacity()
+    {
+        constexpr std::size_t c = (2 * sizeof(void*)) / sizeof(CharT);
+        return c > 0 ? (c - 1) : c;
+    }
+
     struct {
         std::size_t len;
         abi::api_string_mem_base* mem_manager; // see below
@@ -179,13 +186,8 @@ union {
     } big;
 
     struct { // (for small string optimization)
-        constexpr static std::size_t capacity()
-        {
-            constexpr std::size_t c = (sizeof(std::size_t) + sizeof(void*)) / sizeof(CharT);
-            return c == 0 ? 0 : c - 1;
-        }
         unsigned char len;
-        CharT str[capacity() + 1];
+        CharT str[sso_capacity() + 1];
     } small;
 };
 ```
@@ -195,9 +197,9 @@ The `small` object is used in SSO (small string optimization) mode. The `big` ob
 - when in SSO mode:
   - `big.str` must be null
   - `basic_api_string<CharT>::data()` must return `small.str`
-  - `small.str[small.capacity()]` must be zero (otherwise `big.str` may became non zero)
+  - `small.str[sso_capacity()]` must be zero (otherwise `big.str` may became non zero)
   - `small.str[small.len]` must be zero
-  - `small.len` must not be greater than `small.capacity()`
+  - `small.len` must not be greater than `sso_capacity()`
   - if `small.len == 0` , then `big.len` must be zero too ( this facilitates the implementation of `basic_api_string<CharT>::empty()` )
 
 - when not in SSO mode:

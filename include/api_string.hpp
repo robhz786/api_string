@@ -9,6 +9,17 @@
 #include <cstddef>
 
 namespace speudo_std {
+
+#if defined(API_STRING_TEST_MODE)
+
+namespace api_string_test {
+std::size_t allocations_count();
+std::size_t deallocations_count();
+void reset();
+} // namespace api_string_test
+
+#endif // defined(API_STRING_TEST_MODE)
+
 namespace abi {
 
 struct api_string_mem_base;
@@ -52,7 +63,7 @@ struct api_string_mem_base
     ..- `small.len` must not be greater than `small.capacity()`
     ..- if `small.len == 0` , then `big.len` must be zero too
         ( this facilitates the implementation of `basic_api_string::empty()` )
-    
+
     - when not in SSO mode:
     ..- `big.str` must not be null
     ..- `basic_api_string::data()` must return `big.str`
@@ -64,6 +75,12 @@ struct api_string_mem_base
 */
 template <typename CharT> union api_string_data
 {
+    constexpr static std::size_t small_capacity()
+    {
+        constexpr std::size_t s = (2 * sizeof(void*)) / sizeof(CharT);
+        return s > 0 ? (s - 1) : 0;
+    }
+
     struct
     {
         std::size_t len;
@@ -73,16 +90,8 @@ template <typename CharT> union api_string_data
 
     struct
     {
-        constexpr static std::size_t capacity()
-        {
-            constexpr std::size_t c =
-                (sizeof(std::size_t) + sizeof(void*)) / sizeof(CharT);
-            
-            return c == 0 ? 0 : c - 1;
-        }
-
         unsigned char len;
-        CharT str[capacity() + 1];
+        CharT str[small_capacity() + 1];
     } small;
 };
 
@@ -178,27 +187,27 @@ public:
 
     constexpr basic_api_string() noexcept
     {
-        speudo_std::abi::reset(m_data);
+        speudo_std::abi::reset(_data);
     }
 
     basic_api_string(const basic_api_string& other) noexcept
-        : m_data(other.m_data)
+        : _data(other._data)
     {
-        adquire();
+        _adquire();
     }
 
     basic_api_string(basic_api_string&& other) noexcept
-        : m_data(other.m_data)
+        : _data(other._data)
     {
-        if (is_managed())
+        if (_is_managed())
         {
-            speudo_std::abi::reset(other.m_data);
+            speudo_std::abi::reset(other._data);
         }
     }
 
     basic_api_string(const CharT* str, size_type count)
     {
-        speudo_std::private_::api_string_init(m_data, str, count);
+        speudo_std::private_::api_string_init(_data, str, count);
     }
 
     basic_api_string(const CharT* str)
@@ -208,21 +217,21 @@ public:
 
     constexpr basic_api_string(speudo_std::api_string_ref_tag, const CharT* str)
     {
-        speudo_std::abi::reset(m_data);
-        m_data.big.len = speudo_std::private_::str_length(str);
-        m_data.big.str = str;
+        speudo_std::abi::reset(_data);
+        _data.big.len = speudo_std::private_::str_length(str);
+        _data.big.str = str;
     }
 
     ~basic_api_string()
     {
-        release();
+        _release();
     }
 
     // modifiers
 
     basic_api_string& operator=(const basic_api_string& other) noexcept
     {
-        if(m_data.big.str != other.m_data.big.str)
+        if(_data.big.str != other._data.big.str)
         {
             basic_api_string tmp{other};
             swap(tmp);
@@ -232,7 +241,7 @@ public:
 
     basic_api_string& operator=(basic_api_string&& other) noexcept
     {
-        if(m_data.big.str != other.m_data.big.str)
+        if(_data.big.str != other._data.big.str)
         {
             basic_api_string tmp{static_cast<basic_api_string&&>(other)};
             swap(tmp);
@@ -249,27 +258,27 @@ public:
 
     void clear()
     {
-        release();
-        speudo_std::abi::reset(m_data);
+        _release();
+        speudo_std::abi::reset(_data);
     }
 
     constexpr void swap(basic_api_string& other) noexcept
     {
-        data_type tmp = other.m_data;
-        other.m_data = m_data;
-        m_data = tmp;
+        _data_type tmp = other._data;
+        other._data = _data;
+        _data = tmp;
     }
 
     // capacity
 
     constexpr bool empty() const noexcept
     {
-        return m_data.big.len == 0;
+        return _data.big.len == 0;
     }
 
     constexpr size_type length() const noexcept
     {
-        return is_big() ? m_data.big.len : m_data.small.len;
+        return _big() ? _data.big.len : _data.small.len;
     }
 
     constexpr size_type size() const noexcept
@@ -281,7 +290,7 @@ public:
 
     const_pointer data() const noexcept
     {
-        return is_big() ? m_data.big.str : m_data.small.str;
+        return _big() ? _data.big.str : _data.small.str;
     }
     const_pointer c_str() const noexcept
     {
@@ -297,11 +306,11 @@ public:
     }
     const_iterator cend() const noexcept
     {
-        return const_iterator{data_end()};
+        return const_iterator{_data_end()};
     }
     const_iterator end() const noexcept
     {
-        return const_iterator{data_end()};
+        return const_iterator{_data_end()};
     }
     constexpr const_reference operator[](size_type pos) const
     {
@@ -321,7 +330,7 @@ public:
     }
     constexpr const_reference back() const
     {
-        return * (data_end() - 1);
+        return * (_data_end() - 1);
 
     }
 
@@ -350,7 +359,7 @@ public:
             ( &at(pos1)
             , count1
             , s.data()
-            , s.size() );        
+            , s.size() );
     }
 
     // constexpr int compare
@@ -373,7 +382,7 @@ public:
             ( data()
             , size()
             , s
-            , speudo_std::private_::str_length(s) ); 
+            , speudo_std::private_::str_length(s) );
     }
 
     // constexpr int compare
@@ -385,7 +394,7 @@ public:
     //         ( &at(pos1)
     //         , std::min(count1, size() - pos1)
     //         , s
-    //         , speudo_std::private_::str_length(s) ); 
+    //         , speudo_std::private_::str_length(s) );
     // }
 
     // constexpr int compare
@@ -410,7 +419,7 @@ public:
     }
     bool starts_with(CharT x) const noexcept
     {
-        return m_data.big.len != 0 && *data() == x;
+        return _data.big.len != 0 && *data() == x;
     }
     // bool starts_with(const CharT* x) const
     // {
@@ -423,43 +432,48 @@ public:
 
 private:
 
-    const_pointer data_end() const
+    const_pointer _data_end() const
     {
-        return is_big()
-            ? (m_data.big.str + m_data.big.len)
-            : (m_data.small.str + m_data.small.len);
+        return _big()
+            ? (_data.big.str + _data.big.len)
+            : (_data.small.str + _data.small.len);
     }
 
-    bool is_managed()
+    bool _is_managed()
     {
-        return is_big() && m_data.big.mem_manager != nullptr;
+        return _big() && _data.big.mem_manager != nullptr;
     }
 
-    void adquire()
+    void _adquire()
     {
-        if(is_managed())
+        if(_is_managed())
         {
-            m_data.big.mem_manager->adquire();
+            _data.big.mem_manager->adquire();
         }
     }
 
-    void release()
+    void _release()
     {
-        if(is_managed())
+        if(_is_managed())
         {
-            m_data.big.mem_manager->release();
+            _data.big.mem_manager->release();
         }
     }
 
-    constexpr bool is_big() const noexcept
+    constexpr bool _big() const noexcept
     {
-        return m_data.big.str != nullptr;
+        return _data.big.str != nullptr;
     }
 
-    using data_type = speudo_std::abi::api_string_data<CharT>;
-    data_type m_data = data_type{0};
+    using _data_type = speudo_std::abi::api_string_data<CharT>;
+    _data_type _data = _data_type{0};
 
     friend class speudo_std::private_::basic_string_helper;
+
+#if defined(API_STRING_TEST_MODE)
+public:
+    constexpr static std::size_t sso_capacity = _data_type::small_capacity();
+#endif
 };
 
 

@@ -6,7 +6,7 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 #include <private/api_string_memory.hpp>
-#include <string> // char_traits
+#include <string_view> // char_traits
 
 namespace speudo_std {
 
@@ -24,29 +24,29 @@ class basic_string_helper
     static speudo_std::abi::api_string_data<CharT>&
     get_data(speudo_std::basic_api_string<CharT>& s)
     {
-        return s.m_data;
+        return s._data;
     }
 
     template < typename, typename, typename >
     friend class speudo_std::basic_string;
 };
-    
+
 }
 
 
 template <typename CharT, typename Traits, typename Allocator>
 class basic_string
 {
-    using prop_alloc_on_copy_assignment
-    = typename std::allocator_traits<Allocator>::propagate_on_container_copy_assignment;
+    using _alloc_traits = std::allocator_traits<Allocator>;
 
-    using prop_alloc_on_move_assigment
-    = typename std::allocator_traits<Allocator>::propagate_on_container_copy_assignment;
+    using _prop_alloc_on_copy_assignment
+    = typename _alloc_traits::propagate_on_container_copy_assignment;
 
-    using prop_alloc_on_swap
-    = typename std::allocator_traits<Allocator>::propagate_on_container_swap;
+    using _prop_alloc_on_move_assignment
+    = typename _alloc_traits::propagate_on_container_move_assignment;
 
-    using memory_creator = speudo_std::private_::api_string_mem<Allocator>;
+
+    using _memory_creator = speudo_std::private_::api_string_mem<Allocator>;
 
 public:
 
@@ -74,9 +74,9 @@ public:
     }
 
     explicit basic_string(const Allocator& a) noexcept
-        : m_allocator{a}
+        : _allocator{a}
     {
-        reset_data();
+        _reset_data();
     }
 
     basic_string
@@ -91,21 +91,13 @@ public:
     basic_string
         ( const basic_string& other
         , size_type pos
-        , const Allocator& alloc = Allocator() )
-        : basic_string(alloc)
-    {
-        append(&other.at[pos], other.size() - pos);
-    }
+        , const Allocator& alloc = Allocator() );
 
     basic_string
         ( const basic_string& other
         , size_type pos
         , size_type count
-        , const Allocator& alloc = Allocator() )
-        : basic_string(alloc)
-    {
-        append(&other.ap(pos), std::min(count, other.size() - pos));
-    }
+        , const Allocator& alloc = Allocator() );
 
     basic_string
         ( const CharT* s
@@ -113,15 +105,15 @@ public:
         , const Allocator& alloc = Allocator() )
         : basic_string(alloc)
     {
-        append(s, count);
+        assign(s, count);
     }
 
     basic_string
         ( const CharT* s
-        , const Allocator& alloc = Allocator()
-        )
+        , const Allocator& alloc = Allocator() )
         : basic_string(s, Traits::length(s), alloc)
     {
+        assign(s);
     }
 
     // template< class InputIt >
@@ -137,48 +129,27 @@ public:
     }
 
     basic_string(const basic_string& other)
-        : basic_string(other, prop_alloc_on_copy_assignment{})
+        : _allocator(_alloc_traits::select_on_container_copy_construction(other._allocator))
     {
+        _reset_data();
+        append(&other[0], other.size());
     }
 
     basic_string(basic_string&& other, const Allocator& alloc)
-        : m_allocator(alloc)
-        , m_data(other.m_data)
+        noexcept(std::is_nothrow_copy_constructible<Allocator>::value)
+        : _allocator(alloc)
+        , _data(other._data)
     {
-         other.reset_data();
+         other._reset_data();
     }
 
     basic_string(basic_string&& other)
-        : basic_string(std::move(other), prop_alloc_on_move_assigment{})
+        noexcept(std::is_nothrow_move_constructible<Allocator>::value)
+        : _allocator(std::move(other._allocator))
+        , _data(other._data)
     {
+        other._reset_data();
     }
-
-private:
-
-    basic_string(const basic_string& other, std::false_type)
-        : basic_string(other.data(), other.size())
-    {
-    }
-
-    basic_string(const basic_string& other, std::true_type)
-        : basic_string(other.data(), other.size(), other.m_allocator)
-    {
-    }
-
-    basic_string(basic_string&& other, std::false_type)
-        : m_data(other.m_data)
-    {
-        other.reset_data();
-    }
-
-    basic_string(basic_string&& other, std::true_type)
-        : m_allocator(std::move(other.m_allocator))
-        , m_data(other.m_data)
-    {
-        other.reset_data();
-    }
-
-public:
 
     // basic_string
     //     ( std::initializer_list<CharT> init
@@ -195,25 +166,36 @@ public:
     //     , const Allocator& alloc = Allocator()
     //     );
 
+    basic_string
+        ( const basic_api_string<CharT>& other
+        , const Allocator& alloc = Allocator{} )
+        : basic_string(other.data(), other.size(), alloc)
+    {
+    }
+
+    basic_string
+        ( basic_api_string<CharT>&& other
+        , const Allocator& alloc = Allocator{} );
+
 
     ~basic_string()
     {
-        if(big())
+        if(_big())
         {
-            m_data.big.mem_manager->release();
+            _data.big.mem_manager->release();
         }
     }
 
     //
     // Assignment
     //
-    basic_string& operator=(const basic_string& str)
+    basic_string& operator=(const basic_string& other)
     {
-        return assign(str);
+        return assign(other);
     }
-    basic_string& operator=(basic_string&& str)
+    basic_string& operator=(basic_string&& other)
     {
-        return assign(std::move(str));
+        return assign(std::move(other));
     }
     basic_string& operator=(const CharT* s)
     {
@@ -224,9 +206,10 @@ public:
         clear();
         push_back(ch);
     }
-
-    //basic_string& operator=(std::initializer_list<CharT> ilist);
-
+    basic_string& operator=(std::initializer_list<CharT> ilist)
+    {
+        return assign(ilist.begin(), ilist.size());
+    }
     //template<class T>
     //basic_string& operator=(const T& t);
 
@@ -235,39 +218,51 @@ public:
         clear();
         return append(count, ch);
     }
-    basic_string& assign(const basic_string& str)
+    basic_string& assign(const basic_string& other)
     {
-        clear();
-        return append(str);
+        _copy_allocator(other, _prop_alloc_on_copy_assignment{});
+        return assign(&other[0], other.size());
     }
     basic_string& assign
-        ( const basic_string& str
+        ( const basic_string& other
         , size_type pos
-        , size_type count = npos )
+        , size_type count = npos );
+
+    basic_string& assign(basic_string&& other);
+
+private:
+
+    void _copy_allocator(const basic_string& other, std::true_type)
     {
-        clear();
-        append(str, pos, count);
+        _allocator = other._allocator;
     }
-    basic_string& assign(basic_string&& str)
+    void _copy_allocator(const basic_string& other, std::false_type)
     {
-        swap(str);
-        return *this;
     }
-    basic_string& assign(const CharT* s, size_type count)
+    void _move_allocator(basic_string& other, std::true_type)
     {
-        clear();
-        return append(s, count);
+        _allocator = std::move(other._allocator);
     }
+    void _move_allocator(basic_string& other, std::false_type)
+    {
+    }
+
+public:
+
+    basic_string& assign(const CharT* s, size_type count);
+
     basic_string& assign(const CharT* s)
     {
-        clear();
-        return append(s);
+        return assign(s, Traits::length(s));
     }
 
     // template< class InputIt >
     // basic_string& assign(InputIt first, InputIt last);
 
-    // basic_string& assign(std::initializer_list<CharT> ilist);
+    basic_string& assign(std::initializer_list<CharT> ilist)
+    {
+        assign(ilist.begin(), ilist.size());
+    }
 
     // template < class T >
     // basic_string& assign(const T& t);
@@ -278,7 +273,7 @@ public:
 
     allocator_type get_allocator() const
     {
-        return m_allocator;
+        return _allocator;
     }
 
     //
@@ -314,11 +309,11 @@ public:
     }
     const_pointer data() const
     {
-        return big() ? m_data.big.str : m_data.small.str;
+        return _big() ? _data.big.str : _data.small.str;
     }
     pointer data()
     {
-        return big() ? m_data.big.str : m_data.small.str;
+        return _big() ? _data.big.str : _data.small.str;
     }
     const_pointer c_str() const
     {
@@ -328,17 +323,17 @@ public:
 
     operator speudo_std::basic_api_string<CharT>() const &
     {
-        return basic_string{*this}.move_to_api_string();
+        return basic_string{*this}._move_to_api_string();
     }
 
     operator speudo_std::basic_api_string<CharT>() &&
     {
-        return std::move(*this).move_to_api_string();
+        return std::move(*this)._move_to_api_string();
     }
 
     operator speudo_std::basic_api_string<CharT>() const &&
     {
-        return basic_string{*this}.move_to_api_string();
+        return basic_string{*this}._move_to_api_string();
     }
 
     //
@@ -359,15 +354,15 @@ public:
     }
     iterator end()
     {
-        return big()
-            ? (m_data.big.str + m_data.big.len)
-            : (m_data.small.str + m_data.small.len);
+        return _big()
+            ? (_data.big.str + _data.big.len)
+            : (_data.small.str + _data.small.len);
     }
     const_iterator end() const
     {
-        return big()
-            ? (m_data.big.str + m_data.big.len)
-            : (m_data.small.str + m_data.small.len);
+        return _big()
+            ? (_data.big.str + _data.big.len)
+            : (_data.small.str + _data.small.len);
     }
     const_iterator cend() const
     {
@@ -403,15 +398,15 @@ public:
     //
     size_type length() const
     {
-        return big() ? m_data.big.len : m_data.small.len;
+        return _big() ? _data.big.len : _data.small.len;
     }
     size_type size() const
     {
-        return big() ? m_data.big.len : m_data.small.len;
+        return _big() ? _data.big.len : _data.small.len;
     }
     size_type capacity() const
     {
-        return big() ? m_data.big.capacity : m_data.small.capacity();
+        return _big() ? _data.big.capacity : _data.small_capacity();
     }
     bool empty() const
     {
@@ -420,12 +415,12 @@ public:
     void reserve(size_type new_cap)
     {
         if (new_cap > capacity()) {
-            replace_memory(data(), length(), new_cap);
+            _replace_memory(data(), length(), new_cap);
         }
     }
     size_type max_size() const
     {
-        return memory_creator::max_bytes_size(m_allocator) / sizeof(CharT) - 1;
+        return _memory_creator::max_bytes_size(_allocator) / sizeof(CharT) - 1;
     }
     void shrink_to_fit();
 
@@ -441,12 +436,12 @@ public:
 
     // basic_string& insert( size_type index, const CharT* s, size_type count );
 
-    // basic_string& insert( size_type index, const basic_string& str );
+    // basic_string& insert( size_type index, const basic_string& other );
 
     // basic_string& insert
     //     ( size_type index
-    //     , const basic_string& str
-    //     , size_type index_str
+    //     , const basic_string& other
+    //     , size_type index_other
     //     , size_type count = npos);
 
     // iterator insert( const_iterator pos, CharT ch );
@@ -480,16 +475,16 @@ public:
 
     basic_string& append( size_type count, CharT ch );
 
-    basic_string& append( const basic_string& str )
+    basic_string& append( const basic_string& other )
     {
-        return append(str.data(), str.length());
+        return append(other.data(), other.length());
     }
     basic_string& append
-        ( const basic_string& str
+        ( const basic_string& other
         , size_type pos
         , size_type count = npos )
     {
-        return append(&str.at(pos), std::min(count, str.length() - pos));
+        return append(&other.at(pos), std::min(count, other.length() - pos));
     }
     basic_string& append( const CharT* s, size_type count );
 
@@ -501,7 +496,10 @@ public:
     // template< class InputIt >
     // basic_string& append( InputIt first, InputIt last );
 
-    // basic_string& append( std::initializer_list<CharT> ilist );
+    basic_string& append( std::initializer_list<CharT> ilist )
+    {
+        return append(ilist.begin(), ilist.size());
+    }
 
     // template< class T >
     // basic_string& append( const T& t );
@@ -512,9 +510,9 @@ public:
     //     , size_type pos
     //     , size_type count = npos );
 
-    basic_string& operator+=( const basic_string& str )
+    basic_string& operator+=( const basic_string& other )
     {
-        return append(str);
+        return append(other);
     }
     basic_string& operator+=( CharT ch )
     {
@@ -524,36 +522,36 @@ public:
     {
         return append(s);
     }
-    // basic_string& operator+=( std::initializer_list<CharT> ilist )
-    // {
-    //     return append(ilist)
-    // }
+    basic_string& operator+=( std::initializer_list<CharT> ilist )
+    {
+        return append(ilist);
+    }
     // basic_string& operator+=( std::basic_string_view<CharT, Traits> sv)
     // {
     //     return append(&sv.front(), sv.size());
     // }
-    int compare( const basic_string& str ) const
+    int compare( const basic_string& other ) const
     {
-        return do_compare(data(), size(), str.data(), str.size());
+        return _compare(data(), size(), other.data(), other.size());
     }
-    int compare( size_type pos1, size_type count1, const basic_string& str ) const
+    int compare( size_type pos1, size_type count1, const basic_string& other ) const
     {
-        return do_compare
+        return _compare
             ( &at(pos1)
             , std::min(count1, size() - pos1)
-            , str.data()
-            , str.size());              
+            , other.data()
+            , other.size());
     }
     // int compare
     //     ( size_type pos1
     //     , size_type count1
-    //     , const basic_string& str
+    //     , const basic_string& other
     //     , size_type pos2
     //     , size_type count2 = npos ) const;
 
     int compare( const CharT* s ) const
     {
-        return do_compare(data(), size(), s, Traits::length(s));
+        return _compare(data(), size(), s, Traits::length(s));
     }
 
     // int compare( size_type pos1, size_type count1,
@@ -593,17 +591,17 @@ public:
     // basic_string& replace
     //     ( size_type pos
     //     , size_type count
-    //     , const basic_string& str );
+    //     , const basic_string& other );
 
     // basic_string& replace
     //     ( const_iterator first
     //     , const_iterator last
-    //     , const basic_string& str );
+    //     , const basic_string& other );
 
     // basic_string& replace
     //     ( size_type pos
     //     , size_type count
-    //     , const basic_string& str
+    //     , const basic_string& other
     //     , size_type pos2
     //     , size_type count2 = npos );
 
@@ -685,11 +683,33 @@ public:
 
     void resize( size_type count, CharT ch );
 
-    static constexpr bool is_swap_noexcept
-        = std::allocator_traits<Allocator>::propagate_on_container_swap::value;
-//     || std::allocator_traits<Allocator>::is_always_equal::value;
+private:
 
-    void swap(basic_string& other) noexcept(is_swap_noexcept);
+    using _prop_alloc_on_swap
+        = typename _alloc_traits::propagate_on_container_swap;
+
+    constexpr static bool _is_swap_noexcept
+        = _prop_alloc_on_swap::value
+       || _alloc_traits::is_always_equal::value;
+
+    void _swap_allocators(basic_string& other, std::false_type) noexcept
+    {
+    }
+
+    void _swap_allocators(basic_string& other, std::true_type) noexcept(_is_swap_noexcept)
+    {
+        std::swap(_allocator, other._allocator);
+    }
+
+public:
+
+    void swap(basic_string& other) noexcept(_is_swap_noexcept)
+    {
+        data_type tmp = other._data;
+        other._data = _data;
+        _data = tmp;
+        _swap_allocators(other, _prop_alloc_on_swap{});
+    }
 
     //
     // Search
@@ -751,53 +771,70 @@ public:
 
 private:
 
-    speudo_std::basic_api_string<CharT> move_to_api_string() &&;
-    
-    static int do_compare
+    speudo_std::basic_api_string<CharT> _move_to_api_string() &&;
+
+    static int _compare
         ( const CharT* s1
         , size_type len1
         , const CharT* s2
-        , size_type len2
-        );
-
-    constexpr static size_type min_capacity_diff =
-        sizeof(speudo_std::private_::api_string_mem<Allocator>)
-        / sizeof(CharT);
-
-    bool big() const
+        , size_type len2 )
     {
-        return m_data.big.str != nullptr;
-    }
-    bool small() const
-    {
-        return m_data.big.str != nullptr;
-    }
-    bool ok_to_shrink() const
-    {
-        return big() && m_data.big.capacity > 2 * m_data.big.len;
+        int cmp = Traits::compare(s1, s2, std::min(len1, len2));
+        return cmp != 0 ? cmp : (len1 == len2 ? 0 : (len1 < len2 ? -1 : +1));
     }
 
-    size_t grow_cap_if_necessary_for(size_t len_growth);
-
-    void replace_memory(const CharT* new_str, size_type new_len, size_type new_cap);
-
-
-    constexpr void reset_data()
+    bool _big() const
     {
-        if(sizeof(m_data.big) > sizeof(m_data.small))
+        return _data.big.str != nullptr;
+    }
+    bool _small() const
+    {
+        return _data.big.str == nullptr;
+    }
+
+    void _grow_cap_if_necessary_for(size_t len_growth);
+
+    void _replace_memory(const CharT* new_str, size_type new_len, size_type new_cap);
+
+    // const Allocator&& _allocator_ref() const &&
+    // {
+    //     return static_cast<const Allocator&&>(_allocator);
+    // }
+    // const Allocator& _allocator_ref() const &
+    // {
+    //     return _allocator;
+    // }
+    // Allocator& _allocator_ref()&
+    // {
+    //     return _allocator;
+    // }
+    // Allocator&& _allocator_ref() &&
+    // {
+    //     return static_cast<Allocator&&>(_allocator);
+    // }
+
+    constexpr void _reset_data()
+    {
+        if(sizeof(_data.big) > sizeof(_data.small))
         {
-            m_data.big = {0};
+            _data.big = {0};
         }
         else
         {
-            m_data.small = {0};
+            _data.small = {0};
         }
     }
 
-    Allocator m_allocator;
+    Allocator _allocator;
 
     union data_type
     {
+        constexpr static std::size_t small_capacity()
+        {
+            constexpr std::size_t s = (3 * sizeof(void*)) / sizeof(CharT);
+            return s > 0 ? (s - 1) : 0;
+        }
+
         struct
         {
             size_type len;
@@ -808,147 +845,649 @@ private:
 
         struct
         {   // for small string optimizatiom
-            constexpr static size_type capacity()
-            {
-                constexpr size_type c = (2 * sizeof(size_type) + sizeof(void*)) / sizeof(CharT);
-                return c == 0 ? 0 : c - 1;
-            }
             unsigned char len;
-            CharT str[capacity() + 1];
+            CharT str[small_capacity() + 1];
         } small;
     };
 
-    data_type m_data;
+    data_type _data;
+
+#if defined(API_STRING_TEST_MODE)
+public:
+    constexpr static std::size_t sso_capacity = data_type::small_capacity();
+#endif
 };
 
 
-// template< class CharT, class Traits, class Alloc >
-// basic_string<CharT,Traits,Alloc> operator+
-//     ( const basic_string<CharT,Traits,Alloc>& lhs
-//     , const basic_string<CharT,Traits,Alloc>& rhs );
+template <typename CharT, typename Traits, typename Allocator>
+basic_string<CharT, Traits, Allocator>::basic_string
+    ( const basic_string& other
+    , size_type pos
+    , const Allocator& alloc )
+    : basic_string(alloc)
+{
+    if(pos < other.size())
+    {
+        assign(&other[pos], other.size() - pos);
+    }
+    else if(pos > other.size())
+    {
+        private_::throw_std_out_of_range("basic_string::basic_string: pos > other.size()");
+    }
+}
 
-// template< class CharT, class Traits, class Alloc >
-// basic_string<CharT,Traits,Alloc> operator+
-//     ( const CharT* lhs
-//     , const basic_string<CharT,Traits,Alloc>& rhs );
+template <typename CharT, typename Traits, typename Allocator>
+basic_string<CharT, Traits, Allocator>::basic_string
+    ( const basic_string& other
+    , size_type pos
+    , size_type count
+    , const Allocator& alloc )
+    : basic_string(alloc)
+{
+    if(pos < other.size())
+    {
+        assign(&other[pos], count);
+    }
+    else if(pos > other.size())
+    {
+        private_::throw_std_out_of_range("basic_string::basic_string: pos > other.size()");
+    }
+}
 
-// template< class CharT, class Traits, class Alloc >
-// basic_string<CharT,Traits,Alloc> operator+
-//     ( CharT lhs
-//     , const basic_string<CharT,Traits,Alloc>& rhs );
+template <typename CharT, typename Traits, typename Allocator>
+basic_string<CharT, Traits, Allocator>::basic_string
+    ( basic_api_string<CharT>&& other
+    , const Allocator& alloc )
+    : basic_string(alloc)
+{
+    auto& other_data = reinterpret_cast<abi::api_string_data<CharT>&>(other);
 
-// template< class CharT, class Traits, class Alloc >
-// basic_string<CharT,Traits,Alloc> operator+
-//     ( const basic_string<CharT,Traits,Alloc>& lhs
-//     , const CharT* rhs );
+    if( other_data.big.str != nullptr
+     && other_data.big.mem_manager != nullptr
+     && other_data.big.mem_manager->unique() )
+    {
+        _data.big.len = other_data.big.len;
+        _data.big.mem_manager = other_data.big.mem_manager;
+        _data.big.str = const_cast<CharT*>(other_data.big.str);
+        _data.big.capacity = other_data.big.mem_manager->bytes_capacity() / sizeof(CharT) - 1;
+        other_data = speudo_std::abi::api_string_data<CharT> {};
+    }
+    else if( ! other.empty())
+    {
+        assign(&other[0], other.size());
+    }
+}
 
-// template<class CharT, class Traits, class Alloc>
-// basic_string<CharT,Traits,Alloc> operator+
-//     ( const basic_string<CharT,Traits,Alloc>& lhs
-//     , CharT rhs );
-
-// template< class CharT, class Traits, class Alloc >
-// basic_string<CharT,Traits,Alloc> operator+
-//     ( basic_string<CharT,Traits,Alloc>&& lhs
-//     , const basic_string<CharT,Traits,Alloc>& rhs );
-
-// template< class CharT, class Traits, class Alloc >
-// basic_string<CharT,Traits,Alloc> operator+
-//     ( const basic_string<CharT,Traits,Alloc>& lhs
-//     , basic_string<CharT,Traits,Alloc>&& rhs );
-
-// template< class CharT, class Traits, class Alloc >
-// basic_string<CharT,Traits,Alloc> operator+
-//     ( basic_string<CharT,Traits,Alloc>&& lhs
-//     , basic_string<CharT,Traits,Alloc>&& rhs );
-
-// template< class CharT, class Traits, class Alloc >
-// basic_string<CharT,Traits,Alloc> operator+
-//     (const CharT* lhs
-//     , basic_string<CharT,Traits,Alloc>&& rhs );
-
-// template< class CharT, class Traits, class Alloc >
-// basic_string<CharT,Traits,Alloc> operator+
-//     ( CharT lhs
-//     , basic_string<CharT,Traits,Alloc>&& rhs );
-
-// template< class CharT, class Traits, class Alloc >
-// basic_string<CharT,Traits,Alloc> operator+
-//     ( basic_string<CharT,Traits,Alloc>&& lhs
-//     , const CharT* rhs );
-
-// template< class CharT, class Traits, class Alloc >
-// basic_string<CharT,Traits,Alloc> operator+
-//     ( basic_string<CharT,Traits,Alloc>&& lhs
-//     , CharT rhs );
-
-
-// template< class CharT, class Traits, class Alloc >
-// bool operator==
-//     ( const basic_string<CharT,Traits,Alloc>& lhs
-//     , const basic_string<CharT,Traits,Alloc>& rhs );
-
-// template< class CharT, class Traits, class Alloc >
-// bool operator!=
-//     ( const basic_string<CharT,Traits,Alloc>& lhs
-//     , const basic_string<CharT,Traits,Alloc>& rhs );
-
-// template< class CharT, class Traits, class Alloc >
-// bool operator<
-//     ( const basic_string<CharT,Traits,Alloc>& lhs
-//     , const basic_string<CharT,Traits,Alloc>& rhs );
-
-// template< class CharT, class Traits, class Alloc >
-// bool operator<=
-//     ( const basic_string<CharT,Traits,Alloc>& lhs
-//     , const basic_string<CharT,Traits,Alloc>& rhs );
-
-// template< class CharT, class Traits, class Alloc >
-// bool operator>
-//     ( const basic_string<CharT,Traits,Alloc>& lhs
-//     , const basic_string<CharT,Traits,Alloc>& rhs );
-
-// template< class CharT, class Traits, class Alloc >
-// bool operator>=
-//     ( const basic_string<CharT,Traits,Alloc>& lhs
-//     , const basic_string<CharT,Traits,Alloc>& rhs );
+template <typename CharT, typename Traits, typename Allocator>
+basic_string<CharT, Traits, Allocator>&
+basic_string<CharT, Traits, Allocator>::assign
+    ( const basic_string& other
+    , size_type pos
+    , size_type count )
+{
+    if (pos < other.size() && count != 0)
+    {
+        assign(&other[pos], std::min(other.size() - pos, count));
+    }
+    else if(pos > other.size())
+    {
+        private_::throw_std_out_of_range("basic_string::basic_string: pos > other.size()");
+    }
+    return *this;
+}
 
 
-// template< class CharT, class Traits, class Alloc >
-// bool operator==( const CharT* lhs, const basic_string<CharT,Traits,Alloc>& rhs );
+template <typename CharT, typename Traits, typename Allocator>
+basic_string<CharT, Traits, Allocator>&
+basic_string<CharT, Traits, Allocator>::assign(basic_string&& other)
+{
+    _move_allocator(other, _prop_alloc_on_move_assignment{});
+    if(other._big())
+    {
+        if(_big())
+        {
+            _data.big.mem_manager->release();
+        }
+        _data = other._data;
+        other._reset_data();
+    }
+    else if (_small())
+    {
+        _data = other._data;
+    }
+    else
+    {
+        _data.big.len = other._data.small.len;
+        Traits::copy(_data.big.str, other._data.small.str, _data.big.len);
+    }
+    return *this;
+}
 
-// template< class CharT, class Traits, class Alloc >
-// bool operator==( const basic_string<CharT,Traits,Alloc>& lhs, const CharT* rhs );
 
-// template< class CharT, class Traits, class Alloc >
-// bool operator!=( const CharT* lhs, const basic_string<CharT,Traits,Alloc>& rhs );
+template <typename CharT, typename Traits, typename Allocator>
+basic_string<CharT, Traits, Allocator>&
+basic_string<CharT, Traits, Allocator>::assign(const CharT* s, size_type count)
+{
+    if(count > capacity())
+    {
+        _replace_memory(s, count, 2*count);
+    }
+    else if(_small())
+    {
+        _data.small.len = count;
+        Traits::copy(_data.small.str, s, count);
+        Traits::assign(_data.small.str[count], CharT{});
+    }
+    else
+    {
+        _data.big.len = count;
+        Traits::copy(_data.big.str, s, count);
+        Traits::assign(_data.big.str[count], CharT{});
+    }
+    return *this;
+}
 
-// template< class CharT, class Traits, class Alloc >
-// bool operator!=( const basic_string<CharT,Traits,Alloc>& lhs, const CharT* rhs );
+template <typename CharT, typename Traits, typename Allocator>
+CharT& basic_string<CharT, Traits, Allocator>::at(size_type pos)
+{
+    if (pos >= size())
+    {
+        private_::throw_std_out_of_range("basic_string::at() out of range");
+    }
+    return data()[pos];
+}
 
-// template< class CharT, class Traits, class Alloc >
-// bool operator<( const CharT* lhs, const basic_string<CharT,Traits,Alloc>& rhs );
+template <typename CharT, typename Traits, typename Allocator>
+const CharT& basic_string<CharT, Traits, Allocator>::at(size_type pos) const
+{
+    if (pos >= size())
+    {
+        private_::throw_std_out_of_range("basic_string::at() out of range");
+    }
+    return data()[pos];
+}
 
-// template< class CharT, class Traits, class Alloc >
-// bool operator<( const basic_string<CharT,Traits,Alloc>& lhs, const CharT* rhs );
+template <typename CharT, typename Traits, typename Allocator>
+void basic_string<CharT, Traits, Allocator>::resize(size_type count, CharT ch)
+{
+    if(count < size())
+    {
+        if(_big())
+        {
+            _data.big.len = count;
+            Traits::assign(_data.big.str[count], CharT{});
+        }
+        else
+        {
+            _data.small.len = count;
+            Traits::assign(_data.small.str[count], CharT{});
+        }
+    }
+    else if (count > size())
+    {
+        append(count - size(), ch);
+    }
+}
 
-// template< class CharT, class Traits, class Alloc >
-// bool operator<=( const CharT* lhs, const basic_string<CharT,Traits,Alloc>& rhs );
+template <typename CharT, typename Traits, typename Allocator>
+void basic_string<CharT, Traits, Allocator>::shrink_to_fit()
+{
+    if(_big())
+    {
+        constexpr size_type min_capacity_diff =
+            sizeof(speudo_std::private_::api_string_mem<Allocator>)
+            / sizeof(CharT);
 
-// template< class CharT, class Traits, class Alloc >
-// bool operator<=( const basic_string<CharT,Traits,Alloc>& lhs, const CharT* rhs );
+        if (_data.big.len <= _data.small_capacity())
+        {
+            basic_string tmp{_data.big.str, _data.big.len};
+            swap(tmp);
+        }
+        else if(_data.big.capcity - _data.big.len > min_capacity_diff)
+        {
+            _replace_memory(_data.big.str, _data.big.len, _data.big.len);
+        }
+    }
+}
 
-// template< class CharT, class Traits, class Alloc >
-// bool operator>( const CharT* lhs, const basic_string<CharT,Traits,Alloc>& rhs );
+template <typename CharT, typename Traits, typename Allocator>
+inline void basic_string<CharT, Traits, Allocator>::clear()
+{
+    _data.big.len = 0;
+    if(_big())
+    {
+        _data.big.str[0] = 0;
+    }
+    else
+    {
+        _data.small.str[0] = 0;
+    }
+}
 
-// template< class CharT, class Traits, class Alloc >
-// bool operator>( const basic_string<CharT,Traits,Alloc>& lhs, const CharT* rhs );
+//
+// Operations
+//
 
-// template< class CharT, class Traits, class Alloc >
-// bool operator>=( const CharT* lhs, const basic_string<CharT,Traits,Alloc>& rhs );
+template <typename CharT, typename Traits, typename Allocator>
+speudo_std::basic_api_string<CharT>
+basic_string<CharT, Traits, Allocator>::_move_to_api_string() &&
+{
+    speudo_std::basic_api_string<CharT> dest;
+    auto& d = speudo_std::private_::basic_string_helper::get_data(dest);
+    if (_big())
+    {
+        d.big.len = _data.big.len;
+        d.big.mem_manager = _data.big.mem_manager;
+        d.big.str = _data.big.str;
+        _reset_data();
+    }
+    else if (_data.small.len <= d.small_capacity())
+    {
+        d.small.len = _data.small.len;
+        Traits::copy(d.small.str, _data.small.str, _data.small.len);
+        Traits::assign(d.small.str[_data.small.len], CharT{});
+    }
+    else
+    {
+        auto size = (_data.small.len + 1) * sizeof(CharT);
+        auto m = _memory_creator::create(_allocator, size);
+        CharT * str = reinterpret_cast<CharT*>(m.pool);
 
-// template< class CharT, class Traits, class Alloc >
-// bool operator>=( const basic_string<CharT,Traits,Alloc>& lhs, const CharT* rhs );
+        d.big.len = _data.small.len;
+        d.big.mem_manager = m.manager;
+        d.big.str = str;
+        Traits::copy(str, _data.small.str, _data.small.len);
+        Traits::assign(str[_data.small.len], CharT{});
+    }
+    return dest;
+}
+
+template <typename CharT, typename Traits, typename Allocator>
+CharT basic_string<CharT, Traits, Allocator>::pop_back()
+{
+    if(_big())
+    {
+        if (_data.big.len > 0)
+        {
+            CharT value = _data.big.str[_data.big.len - 1];
+            -- _data.big.len;
+            return value;
+        }
+    }
+    else if (_data.small.len > 0)
+    {
+        CharT value = _data.small.str[_data.small.len - 1];
+        -- _data.small.len;
+        return value;
+    }
+
+    return 0;
+}
+
+template <typename CharT, typename Traits, typename Allocator>
+void basic_string<CharT, Traits, Allocator>::push_back(CharT ch)
+{
+    _grow_cap_if_necessary_for(1);
+    if(_big())
+    {
+        Traits::assign(_data.big.str[_data.big.len + 1], CharT());
+        Traits::assign(_data.big.str[_data.big.len], ch);
+        ++ _data.big.len;
+    }
+    else
+    {
+        Traits::assign(_data.small.str[_data.small.len + 1], CharT());
+        Traits::assign(_data.small.str[_data.small.len], ch);
+        ++ _data.small.len;
+    }
+
+}
+
+template <typename CharT, typename Traits, typename Allocator>
+basic_string<CharT, Traits, Allocator>&
+basic_string<CharT, Traits, Allocator>::append(size_type count, CharT ch)
+{
+    _grow_cap_if_necessary_for(count);
+    if(_big())
+    {
+        Traits::assign(_data.big.str, count, ch);
+        Traits::assign(_data.big.str[_data.big.len + count], CharT());
+        _data.big.len += count;
+    }
+    else
+    {
+        Traits::assign(_data.small.str, count, ch);
+        Traits::assign(_data.small.str[_data.small.len + count], CharT());
+        _data.small.len += count;
+    }
+    return *this;
+}
+
+template <typename CharT, typename Traits, typename Allocator>
+basic_string<CharT, Traits, Allocator>&
+basic_string<CharT, Traits, Allocator>::append(const CharT* s, size_type count)
+{
+    _grow_cap_if_necessary_for(count);
+    if(_big())
+    {
+        Traits::assign(_data.big.str[_data.big.len + count], CharT());
+        Traits::copy(_data.big.str + _data.big.len, s, count);
+        _data.big.len += count;
+    }
+    else
+    {
+        Traits::assign(_data.small.str[_data.small.len + count], CharT());
+        Traits::copy(_data.small.str + _data.small.len, s, count);
+        _data.small.len += count;
+    }
+    return *this;
+}
+
+template <typename CharT, typename Traits, typename Allocator>
+void basic_string<CharT, Traits, Allocator>::_grow_cap_if_necessary_for(size_t len_growth)
+{
+    if (length() + len_growth > capacity())
+    {
+        size_type new_cap = 2 * (length() + len_growth);
+        _replace_memory(data(), length(), new_cap);
+    }
+}
+
+template <typename CharT, typename Traits, typename Allocator>
+void basic_string<CharT, Traits, Allocator>::_replace_memory
+    ( const CharT* new_str
+    , basic_string::size_type new_len
+    , basic_string::size_type new_cap )
+{
+    assert(new_cap >= new_len);
+
+    auto m = _memory_creator::create(_allocator, (new_cap + 1) * sizeof(CharT));
+
+    data_type new_data;
+    new_data.big.len = new_len;
+    new_data.big.capacity = m.bytes_capacity / sizeof(CharT) - 1;
+    new_data.big.mem_manager = m.manager;
+    new_data.big.str = reinterpret_cast<CharT*>(m.pool);
+    Traits::copy(new_data.big.str, new_str, new_len);
+    Traits::assign(new_data.big.str[new_len], CharT{});
+
+    data_type old_data = _data;
+    _data = new_data;
+    if (old_data.big.str != nullptr)
+    {
+        old_data.big.mem_manager->release();
+    }
+}
+
+
+
+template< class CharT, class Traits, class Alloc >
+basic_string<CharT,Traits,Alloc> operator+
+    ( const basic_string<CharT,Traits,Alloc>& lhs
+    , const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    basic_string<CharT,Traits,Alloc> str;
+    str.reserve(lhs.size() + rhs.size());
+    str.append(lhs);
+    str.append(rhs);
+    return std::move(str);
+}
+
+template< class CharT, class Traits, class Alloc >
+basic_string<CharT,Traits,Alloc> operator+
+    ( const CharT* lhs
+    , const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    basic_string<CharT,Traits,Alloc> str;
+    std::size_t lhs_len = Traits::length(lhs);
+    str.reserve(lhs_len + rhs.size());
+    str.append(lhs, lhs_len);
+    str.append(rhs, rhs.length());
+    return std::move(str);
+}
+
+template< class CharT, class Traits, class Alloc >
+basic_string<CharT,Traits,Alloc> operator+
+    ( CharT lhs
+    , const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    basic_string<CharT,Traits,Alloc> str;
+    str.reserve(1 + rhs.size());
+    str.push_back(lhs);
+    str.append(rhs);
+    return std::move(str);
+}
+
+template<class CharT, class Traits, class Alloc>
+basic_string<CharT,Traits,Alloc> operator+
+    ( const basic_string<CharT,Traits,Alloc>& lhs
+    , CharT rhs )
+{
+    basic_string<CharT,Traits,Alloc> str;
+    str.reserve(lhs.size() + 1);
+    str = lhs;
+    str.push_back(rhs);
+    return std::move(str);
+}
+
+template< class CharT, class Traits, class Alloc >
+basic_string<CharT,Traits,Alloc> operator+
+    ( basic_string<CharT,Traits,Alloc>&& lhs
+    , const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    lhs.reserve(lhs.size() + rhs.size());
+    std::move(lhs.apppend(rhs));
+}
+
+template< class CharT, class Traits, class Alloc >
+basic_string<CharT,Traits,Alloc> operator+
+    ( const basic_string<CharT,Traits,Alloc>& lhs
+    , basic_string<CharT,Traits,Alloc>&& rhs )
+{
+    if( ! lhs.empty())
+    {
+        if(rhs.empty())
+        {
+            if(rhs.capacity() >= lhs.size())
+            {
+                return std::move(rhs.append(lhs));
+            }
+            return lhs;
+        }
+        std::size_t rhs_size = rhs.size();
+        rhs.resize(rhs_size + lhs.size());
+        Traits::move(&rhs[0] + lhs.size(), &rhs[0], rhs_size);
+        Traits::copy(rhs.data(), lhs.data(), lhs.size());
+    }
+    return std::move(rhs);
+}
+
+template< class CharT, class Traits, class Alloc >
+basic_string<CharT,Traits,Alloc> operator+
+    ( basic_string<CharT,Traits,Alloc>&& lhs
+    , basic_string<CharT,Traits,Alloc>&& rhs )
+{
+    std::size_t len = lhs.length() + rhs.length();
+    if(lhs.capacity() >= len || rhs.capacity() < len)
+    {
+        return std::move(lhs.append(rhs));
+    }
+    rhs.resize(len);
+    Traits::move(&rhs[0] + lhs.length(), &rhs[0], rhs.length());
+    Traits::copy(rhs.data(), lhs.data(), lhs.length());
+    return std::move(rhs);
+}
+
+template< class CharT, class Traits, class Alloc >
+basic_string<CharT,Traits,Alloc> operator+
+    ( const CharT* lhs
+    , basic_string<CharT,Traits,Alloc>&& rhs )
+{
+    std::size_t lhs_len = Traits::length(lhs);
+    if (lhs_len > 0)
+    {
+        if (rhs.empty())
+        {
+            rhs = lhs;
+        }
+        else
+        {
+            rhs.resize(rhs.length() + lhs_len);
+            Traits::move(&rhs[0] + lhs_len, &rhs[0], rhs.length());
+            Traits::copy(rhs.data(), lhs, lhs_len);
+        }
+    }
+    return std::move(rhs);
+}
+
+template< class CharT, class Traits, class Alloc >
+basic_string<CharT,Traits,Alloc> operator+
+    ( CharT lhs
+    , basic_string<CharT,Traits,Alloc>&& rhs )
+{
+    rhs.resize(rhs.size() + 1);
+    Traits::move(&rhs[0] + 1, &rhs[0], rhs.length());
+    Traits::assign(rhs[0], lhs);
+    return std::move(rhs);
+}
+
+template< class CharT, class Traits, class Alloc >
+basic_string<CharT,Traits,Alloc> operator+
+    ( basic_string<CharT,Traits,Alloc>&& lhs
+    , const CharT* rhs )
+{
+    return std::move(lhs.append(rhs));
+}
+
+template< class CharT, class Traits, class Alloc >
+basic_string<CharT,Traits,Alloc> operator+
+    ( basic_string<CharT,Traits,Alloc>&& lhs
+    , CharT rhs )
+{
+    return std::move(lhs.push_back(rhs));
+}
+
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator==
+    ( const basic_string<CharT,Traits,Alloc>& lhs
+    , const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    return lhs.compare(rhs) == 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator!=
+    ( const basic_string<CharT,Traits,Alloc>& lhs
+    , const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    return lhs.compare(rhs) != 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator<
+    ( const basic_string<CharT,Traits,Alloc>& lhs
+    , const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    return lhs.compare(rhs) < 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator<=
+    ( const basic_string<CharT,Traits,Alloc>& lhs
+    , const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    return lhs.compare(rhs) <= 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator>
+    ( const basic_string<CharT,Traits,Alloc>& lhs
+    , const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    return lhs.compare(rhs) > 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator>=
+    ( const basic_string<CharT,Traits,Alloc>& lhs
+    , const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    return lhs.compare(rhs) >= 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator==( const basic_string<CharT,Traits,Alloc>& lhs, const CharT* rhs )
+{
+    return lhs.compare(rhs) == 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator==( const CharT* lhs, const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    return rhs.compare(lhs) == 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator!=( const basic_string<CharT,Traits,Alloc>& lhs, const CharT* rhs )
+{
+    return lhs.compare(rhs) != 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator!=( const CharT* lhs, const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    return rhs.compare(lhs) != 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator<( const basic_string<CharT,Traits,Alloc>& lhs, const CharT* rhs )
+{
+    return lhs.compare(rhs) < 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator<( const CharT* lhs, const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    return rhs.compare(lhs) > 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator<=( const basic_string<CharT,Traits,Alloc>& lhs, const CharT* rhs )
+{
+    return lhs.compare(rhs) <= 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator<=( const CharT* lhs, const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    return rhs.compare(lhs) >= 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator>( const basic_string<CharT,Traits,Alloc>& lhs, const CharT* rhs )
+{
+    return lhs.compare(rhs) > 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator>( const CharT* lhs, const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    return rhs.compare(lhs) < 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator>=( const basic_string<CharT,Traits,Alloc>& lhs, const CharT* rhs )
+{
+    return lhs.compare(rhs) >= 0;
+}
+
+template< class CharT, class Traits, class Alloc >
+inline bool operator>=( const CharT* lhs, const basic_string<CharT,Traits,Alloc>& rhs )
+{
+    return rhs.compare(lhs) <= 0;
+}
+
 
 using string = basic_string<char>;
 using wstring = basic_string<wchar_t>;
@@ -956,10 +1495,6 @@ using u16string = basic_string<char16_t>;
 using u32string = basic_string<char32_t>;
 
 
-
 } // namespace speudo_std
-
-
-#include <private/string.tcc>
 
 #endif

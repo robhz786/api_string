@@ -11,6 +11,18 @@
 
 namespace speudo_std {
 
+namespace api_string_test {
+
+#if defined(API_STRING_TEST_MODE)
+void report_allocation();
+void report_deallocation();
+#else
+inline void report_allocation(){}
+inline void report_deallocation(){}
+#endif
+
+} // namespace api_string_test
+
 namespace private_ {
 
 constexpr std::size_t api_string_mem_alignment
@@ -62,6 +74,8 @@ public:
             = rebinded_allocator_traits::allocate(r_allocator, appended_array_size + 1);
         rebinded_allocator_traits::construct(r_allocator, self, a, bytes_capacity);
 
+        speudo_std::api_string_test::report_allocation();
+
         return {self, reinterpret_cast<char*>(self + 1), bytes_capacity};
     }
 
@@ -72,11 +86,11 @@ public:
             (rebinded_allocator_traits::max_size(a) - 1)
             * sizeof(typename rebinded_allocator_traits::value_type);
     }
-        
+
 private:
 
 
-    
+
     std::atomic<std::ptrdiff_t> m_refcount{1};
     size_type m_bytes_capacity{0};
     Allocator& get_allocator()
@@ -104,7 +118,7 @@ private:
         auto* self = static_cast<api_string_mem*>(mem_base);
         return self->m_refcount.load() == 1;
     }
-    
+
     static std::size_t bytes_capacity(api_string_mem_base* mem_base)
     {
         auto* self = static_cast<api_string_mem*>(mem_base);
@@ -117,7 +131,7 @@ private:
             {0, adquire, release, unique, bytes_capacity};
         return & table;
     }
-    
+
     static void delete_self(api_string_mem_base* mem_base)
     {
         auto* self = static_cast<api_string_mem*>(mem_base);
@@ -125,6 +139,8 @@ private:
         size_type count = 1 + self->m_bytes_capacity / sizeof(api_string_mem);
         rebinded_allocator_traits::destroy(r_allocator, self);
         rebinded_allocator_traits::deallocate(r_allocator, self, count);
+
+        speudo_std::api_string_test::report_deallocation();
     }
 };
 
@@ -146,10 +162,10 @@ void api_string_init_impl
 {
     speudo_std::abi::reset(data);
 
-    if(count > data.small.capacity())
+    if(count > data.small_capacity())
     {
         auto mem = api_string_mem<Allocator>::create(a, sizeof(CharT) * (count + 1));
-        
+
         CharT* str = reinterpret_cast<CharT*>(mem.pool);
         Traits::copy(str, src, count);
         Traits::assign(str[count], CharT{});
