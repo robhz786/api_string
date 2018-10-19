@@ -5,20 +5,23 @@
 
 # Introduction
 
-The purpose of this project is to persuade the addition into C++ Stadard Libraries of a new string class with a standard ABI that could safely cross module boudaries carrying dynamic allocated memory. The `basic_api_string` class template aims to prove the concept. It references an immutable array of characters, whose lifetime is managed through reference count. Its notable characteristics are:
+Almost every API contain some functions that receive or return strings. Yet, the C++ standard does not provide any good solution to transfer strings across modules boundaries. While `std::basic_string` does not have a standard ABI, raw strings and `std::basic_string_view` are not able manage heap allocated memory.
 
-- It has a portable and well specified ABI.
-- Its header file is very fast to compile.
-- Memory allocated in one module is never deallocated in another.
-- Copy constructor never throws.
-- Small string optimization is supported.
-- The user can choose (at run-time) to make the `api_string` just reference a string without managing its lifetime. This could be used to avoid unnecessary allocation when, for example, constructing an `api_string` from a statically allocated string - a very common case, probably.
+The purpose of this project is to persuade the addition into the C++ Standard Library of a new string type with a standard ABI that could safely cross module boundaries carrying dynamically allocated memory. The proposed solution is to use a string type that can reference an immutable array of characters managed by reference counting, just like an `std::shared_ptr<char[]>`. 
 
-Since `api_string` primary aims to be suitable to be used in APIs, compilation time is very important, especially because strings tends to be needed everywhere. Because of that, you will note some limitations when comparing to `std::string_view` and `std::string`. For example: no reverse iterator and no possibility to choose a traits class. However, the user can simply create a `std::string_view` from an `api_string` object, or use or use some other parts of `std`, in order to get these things.
+The `basic_api_string` class template aims to prove the concept. Its notable characteristics are:
 
-The second purpose of this project is to check whether it is possible to reimplement `std::string` so that it uses the same memory structure of `api_string`. The difference is that `std::string` would always keep unique ownership in order to safely provide mutable access to the individual characters. This way, after the user finishes the compostion of the `std::string` content, it could be moved into an `api_string` without memory allocation and copy, leaving the original `std::string` object empty. After being moved, the content get shared ownership, and lost mutable access.
+- Copy constructor is always fast and never throws.
+- Header file is fast to compile.
+- It supports small string optimisation.
+- The user can choose to construct an `api_string` that only reference a string without managing its lifetime. After all, why to allocate and copy, if one can just reference a statically allocated string?
+- Can safely cross modules boundaries, because:
+  * It has a specified ABI
+  * Memory allocated in one module is not deallocated in another.
 
-This is actually just the aproach used in so many other popular programming languages...
+Since `api_string` primary aims to be suitable to be used in APIs, compilation time is critical, especially because strings tend to be needed everywhere. Therefore you will note some limitations when comparing it to `std::string_view` and `std::string`. For example: no reverse iterator and no possibility to choose a traits class. However, the user can simply create an `std::string_view` from an `api_string` object, or use or use some other parts of `std`, to achieve the missing functionalities.
+
+The second purpose of this project is to check whether it is possible to reimplement `std::string` so that it uses the same memory structure of `api_string`. The difference is that `std::string` would always keep unique ownership to safely provide mutable access to the individual characters. This way, after the user finishes the composition of the `std::string` content, it could be moved into an `api_string` without memory allocation and copy, leaving the original `std::string` object empty. After being moved, the content gets shared ownership, and lost mutable access.
 
 ---
 # The headers
@@ -28,7 +31,7 @@ There are two public headers in this repository: `api_string.hpp` and `string.hp
 
 `api_string.hpp` defines `basic_api_string` class template, whose interface is similar to the one of `std::basic_string_view`. It has some some limitations in order to reduce compilation times:
 - `CharT` must be `char`, `char16_t`, `char32_t` or `wchar_t`
-- No reverse iterator. They would require the inclusion of <iterator> ( Even if we implement it, we would still need `std::andom_access_iterator_tag` ).
+- No reverse iterator. They would require the inclusion of `<iterator>` ( Even if we implement it, we would still need `std::andom_access_iterator_tag` ).
 - Not possible to customize `Traits` class.
 - There is no Allocator template parameter. However, the other header `string.hpp` provides ways to create in `api_string` object with an alternative allocator.
 
@@ -159,8 +162,8 @@ An example:
     speudo_std::string str = "---- blah blah blah blah ----";
     speudo_std::api_string astr = std::move(str);
 
-    REQUIRE(str.empty());
-    REQUIRE(astr == "---- blah blah blah blah ----");
+    assert(str.empty());
+    assert(astr == "---- blah blah blah blah ----");
 ```
 
 
