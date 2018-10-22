@@ -111,7 +111,7 @@ constexpr void reset(speudo_std::abi::api_string_data<CharT>& data)
 
 } // namespace abi
 
-namespace private_ {
+namespace _detail {
 
 class basic_string_helper;
 
@@ -166,10 +166,17 @@ int str_compare
 
 void throw_std_out_of_range(const char*);
 
-} // namespace private_
+} // namespace _detail
 
-// tag type
+
 struct api_string_ref_tag {};
+
+template <typename CharT> class basic_api_string;
+
+namespace _detail{
+template <typename CharT>
+inline basic_api_string<CharT> api_string_ref(const CharT* str, std::size_t len);
+}
 
 template <typename CharT> class basic_api_string
 {
@@ -207,18 +214,18 @@ public:
 
     basic_api_string(const CharT* str, size_type count)
     {
-        speudo_std::private_::api_string_init(_data, str, count);
+        speudo_std::_detail::api_string_init(_data, str, count);
     }
 
     basic_api_string(const CharT* str)
-        : basic_api_string(str, speudo_std::private_::str_length(str))
+        : basic_api_string(str, speudo_std::_detail::str_length(str))
     {
     }
 
     constexpr basic_api_string(speudo_std::api_string_ref_tag, const CharT* str)
     {
-        speudo_std::abi::reset(_data);
-        _data.big.len = speudo_std::private_::str_length(str);
+        _data.big.len = speudo_std::_detail::str_length(str);
+        _data.big.mem_manager = nullptr;
         _data.big.str = str;
     }
 
@@ -262,7 +269,7 @@ public:
         speudo_std::abi::reset(_data);
     }
 
-    constexpr void swap(basic_api_string& other) noexcept
+    void swap(basic_api_string& other) noexcept
     {
         _data_type tmp = other._data;
         other._data = _data;
@@ -312,7 +319,7 @@ public:
     {
         return const_iterator{_data_end()};
     }
-    constexpr const_reference operator[](size_type pos) const
+    constexpr const_reference operator[](size_type pos) const noexcept
     {
         return data()[pos];
     }
@@ -320,15 +327,15 @@ public:
     {
         if (pos >= length())
         {
-            speudo_std::private_::throw_std_out_of_range("basic_api_string::at() out of range");
+            speudo_std::_detail::throw_std_out_of_range("basic_api_string::at() out of range");
         }
         return data()[pos];
     }
-    constexpr const_reference front() const
+    constexpr const_reference front() const noexcept
     {
         return * data();
     }
-    constexpr const_reference back() const
+    constexpr const_reference back() const noexcept
     {
         return * (_data_end() - 1);
 
@@ -338,7 +345,7 @@ public:
 
     int compare(const basic_api_string& s) const
     {
-        return speudo_std::private_::str_compare
+        return speudo_std::_detail::str_compare
             ( data()
             , size()
             , s.data()
@@ -355,7 +362,7 @@ public:
         {
             count1 = max_count;
         }
-        return speudo_std::private_::str_compare
+        return speudo_std::_detail::str_compare
             ( &at(pos1)
             , count1
             , s.data()
@@ -369,7 +376,7 @@ public:
     //     , size_type pos2
     //     , size_type count2 ) const
     // {
-    //     return speudo_std::private_::str_compare
+    //     return speudo_std::_detail::str_compare
     //         ( &at(pos1)
     //         , std::min(count1, size() - pos1)
     //         , &s.at(pos2)
@@ -378,11 +385,11 @@ public:
 
     constexpr int compare(const CharT* s) const
     {
-        return speudo_std::private_::str_compare
+        return speudo_std::_detail::str_compare
             ( data()
             , size()
             , s
-            , speudo_std::private_::str_length(s) );
+            , speudo_std::_detail::str_length(s) );
     }
 
     // constexpr int compare
@@ -390,11 +397,11 @@ public:
     //     , size_type count1
     //     , const CharT* s) const
     // {
-    //     return speudo_std::private_::str_compare
+    //     return speudo_std::_detail::str_compare
     //         ( &at(pos1)
     //         , std::min(count1, size() - pos1)
     //         , s
-    //         , speudo_std::private_::str_length(s) );
+    //         , speudo_std::_detail::str_length(s) );
     // }
 
     // constexpr int compare
@@ -403,7 +410,7 @@ public:
     //     , const CharT* s
     //     , size_type count2 ) const
     // {
-    //     return speudo_std::private_::str_compare
+    //     return speudo_std::_detail::str_compare
     //         ( &at(pos1)
     //         , std::min(count1, size() - pos1)
     //         , s
@@ -431,6 +438,19 @@ public:
     //   bool ends_with(const CharT* x) const;
 
 private:
+
+    constexpr basic_api_string
+        ( speudo_std::api_string_ref_tag
+        , const CharT* str
+        , std::size_t len )
+    {
+        _data.big.len = len;
+        _data.big.mem_manager = nullptr;
+        _data.big.str = str;
+    }
+
+    template <typename C>
+    friend basic_api_string<C>  _detail::api_string_ref(const C* str, std::size_t);
 
     const_pointer _data_end() const
     {
@@ -468,7 +488,7 @@ private:
     using _data_type = speudo_std::abi::api_string_data<CharT>;
     _data_type _data = _data_type{0};
 
-    friend class speudo_std::private_::basic_string_helper;
+    friend class speudo_std::_detail::basic_string_helper;
 
 #if defined(API_STRING_TEST_MODE)
 public:
@@ -476,12 +496,47 @@ public:
 #endif
 };
 
+using api_string    = basic_api_string<char>;
+using api_u16string = basic_api_string<char16_t>;
+using api_u32string = basic_api_string<char32_t>;
+using api_wstring   = basic_api_string<wchar_t>;
 
 template <typename CharT>
 constexpr speudo_std::basic_api_string<CharT> api_string_ref(const CharT* str)
 {
     return {speudo_std::api_string_ref_tag{}, str};
 }
+
+namespace _detail {
+
+template <typename CharT>
+inline basic_api_string<CharT> api_string_ref(const CharT* str, std::size_t len)
+{
+    return {speudo_std::api_string_ref_tag{}, str, len};
+}
+
+}
+
+namespace string_literals {
+
+inline api_string operator ""_as(const char* str, std::size_t len)
+{
+    return speudo_std::_detail::api_string_ref(str, len);
+}
+inline api_u16string operator ""_as(const char16_t* str, std::size_t len)
+{
+    return speudo_std::_detail::api_string_ref(str, len);
+}
+inline api_u32string operator ""_as(const char32_t* str, std::size_t len)
+{
+    return speudo_std::_detail::api_string_ref(str, len);
+}
+inline api_wstring operator ""_as(const wchar_t* str, std::size_t len)
+{
+    return speudo_std::_detail::api_string_ref(str, len);
+}
+
+} // namespace string_literals
 
 template<class CharT>
 bool operator == (const speudo_std::basic_api_string<CharT>& lhs, const speudo_std::basic_api_string<CharT>& rhs)
@@ -591,11 +646,6 @@ bool operator >= (const speudo_std::basic_api_string<CharT>& lhs, const CharT* r
     return lhs >= speudo_std::api_string_ref(rhs);
 }
 
-
-using api_string    = basic_api_string<char>;
-using api_u16string = basic_api_string<char16_t>;
-using api_u32string = basic_api_string<char32_t>;
-using api_wstring   = basic_api_string<wchar_t>;
 
 
 }// namespace speudo_std

@@ -23,7 +23,7 @@ inline void report_deallocation(){}
 
 } // namespace api_string_test
 
-namespace private_ {
+namespace _detail {
 
 constexpr std::size_t api_string_mem_alignment
     = alignof(speudo_std::abi::api_string_mem_base) > alignof(char32_t)
@@ -31,7 +31,7 @@ constexpr std::size_t api_string_mem_alignment
     : alignof(char32_t);
 
 template <typename Allocator>
-class alignas(speudo_std::private_::api_string_mem_alignment) api_string_mem
+class alignas(speudo_std::_detail::api_string_mem_alignment) api_string_mem
     : public speudo_std::abi::api_string_mem_base
     , private Allocator
 {
@@ -184,9 +184,7 @@ void api_string_init_impl
 }
 
 
-
-
-} // namespace private_
+} // namespace _detail
 } // namespace speudo_std
 
 #endif

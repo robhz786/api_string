@@ -5,7 +5,7 @@
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 
-#include <private/api_string_memory.hpp>
+#include <detail/api_string_memory.hpp>
 #include <string_view> // char_traits
 
 namespace speudo_std {
@@ -16,7 +16,7 @@ template
     , typename Allocator = std::allocator<CharT> >
 class basic_string;
 
-namespace private_ {
+namespace _detail {
 
 class basic_string_helper
 {
@@ -46,7 +46,7 @@ class basic_string
     = typename _alloc_traits::propagate_on_container_move_assignment;
 
 
-    using _memory_creator = speudo_std::private_::api_string_mem<Allocator>;
+    using _memory_creator = speudo_std::_detail::api_string_mem<Allocator>;
 
 public:
 
@@ -872,7 +872,7 @@ basic_string<CharT, Traits, Allocator>::basic_string
     }
     else if(pos > other.size())
     {
-        private_::throw_std_out_of_range("basic_string::basic_string: pos > other.size()");
+        _detail::throw_std_out_of_range("basic_string::basic_string: pos > other.size()");
     }
 }
 
@@ -890,7 +890,7 @@ basic_string<CharT, Traits, Allocator>::basic_string
     }
     else if(pos > other.size())
     {
-        private_::throw_std_out_of_range("basic_string::basic_string: pos > other.size()");
+        _detail::throw_std_out_of_range("basic_string::basic_string: pos > other.size()");
     }
 }
 
@@ -931,7 +931,7 @@ basic_string<CharT, Traits, Allocator>::assign
     }
     else if(pos > other.size())
     {
-        private_::throw_std_out_of_range("basic_string::basic_string: pos > other.size()");
+        _detail::throw_std_out_of_range("basic_string::basic_string: pos > other.size()");
     }
     return *this;
 }
@@ -992,7 +992,7 @@ CharT& basic_string<CharT, Traits, Allocator>::at(size_type pos)
 {
     if (pos >= size())
     {
-        private_::throw_std_out_of_range("basic_string::at() out of range");
+        _detail::throw_std_out_of_range("basic_string::at() out of range");
     }
     return data()[pos];
 }
@@ -1002,7 +1002,7 @@ const CharT& basic_string<CharT, Traits, Allocator>::at(size_type pos) const
 {
     if (pos >= size())
     {
-        private_::throw_std_out_of_range("basic_string::at() out of range");
+        _detail::throw_std_out_of_range("basic_string::at() out of range");
     }
     return data()[pos];
 }
@@ -1035,7 +1035,7 @@ void basic_string<CharT, Traits, Allocator>::shrink_to_fit()
     if(_big())
     {
         constexpr size_type min_capacity_diff =
-            sizeof(speudo_std::private_::api_string_mem<Allocator>)
+            sizeof(speudo_std::_detail::api_string_mem<Allocator>)
             / sizeof(CharT);
 
         if (_data.big.len <= _data.small_capacity())
@@ -1073,7 +1073,7 @@ speudo_std::basic_api_string<CharT>
 basic_string<CharT, Traits, Allocator>::_move_to_api_string() &&
 {
     speudo_std::basic_api_string<CharT> dest;
-    auto& d = speudo_std::private_::basic_string_helper::get_data(dest);
+    auto& d = speudo_std::_detail::basic_string_helper::get_data(dest);
     if (_big())
     {
         d.big.len = _data.big.len;

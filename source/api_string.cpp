@@ -1,4 +1,4 @@
-#include <private/api_string_memory.hpp>
+#include <detail/api_string_memory.hpp>
 #include <string> // char_traits
 #include <stdexcept>
 	
@@ -43,7 +43,7 @@ void report_deallocation()
 
 #endif //defined(API_STRING_TEST_MODE)
 
-namespace private_ {
+namespace _detail {
 
 void throw_std_out_of_range(const char* msg)
 {
@@ -128,7 +128,7 @@ void api_string_init
     , const char* src
     , std::size_t count)
 {
-    speudo_std::private_::api_string_init_impl(data, src, count, std::allocator<char>{});
+    speudo_std::_detail::api_string_init_impl(data, src, count, std::allocator<char>{});
 }
 
 void api_string_init
@@ -136,7 +136,7 @@ void api_string_init
     , const char16_t* src
     , std::size_t count)
 {
-    speudo_std::private_::api_string_init_impl(data, src, count);
+    speudo_std::_detail::api_string_init_impl(data, src, count);
 }
 
 void api_string_init
@@ -144,7 +144,7 @@ void api_string_init
     , const char32_t* src
     , std::size_t count)
 {
-    speudo_std::private_::api_string_init_impl(data, src, count);
+    speudo_std::_detail::api_string_init_impl(data, src, count);
 }
 
 void api_string_init
@@ -152,9 +152,9 @@ void api_string_init
     , const wchar_t*  src
     , std::size_t count)
 {
-    speudo_std::private_::api_string_init_impl(data, src, count);
+    speudo_std::_detail::api_string_init_impl(data, src, count);
 }
 
 
 } // namespace speudo_std
-} // namespace private_
+} // namespace _detail

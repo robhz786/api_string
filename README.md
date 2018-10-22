@@ -7,25 +7,26 @@
 
 Almost every API contain some functions that receive or return strings. Yet, the C++ standard does not provide any good solution to transfer strings across modules boundaries. While `std::basic_string` does not have a standard ABI, raw strings and `std::basic_string_view` are not able manage heap allocated memory.
 
-The purpose of this project is to persuade the addition into the C++ Standard Library of a new string type with a standard ABI that could safely cross module boundaries carrying dynamically allocated memory. The proposed solution is to use a string type that can reference an immutable array of characters managed by reference counting, just like an `std::shared_ptr<char[]>`. 
+The purpose of this project is to persuade the addition into the C++ Standard Library of a new string type with a standard ABI that could safely cross module boundaries carrying dynamically allocated memory. The proposed solution uses reference counting to manage and immutable array of characters. Kind of `std::shared_ptr<const char[]>`.
 
 The `basic_api_string` class template aims to prove the concept. Its notable characteristics are:
 
 - Copy constructor is always fast and never throws.
 - Header file is fast to compile.
 - It supports small string optimisation.
-- The user can choose to construct an `api_string` that only reference a string without managing its lifetime. After all, why to allocate and copy, if one can just reference a statically allocated string?
+- `c_str()` member function that returns a null terminated raw string.
+- The string literal `operator "" _as` creates an `basic_api_string` object without allocating memory. 
 - Can safely cross modules boundaries, because:
   * It has a specified ABI
-  * Memory allocated in one module is not deallocated in another.
+  * It ensures that memory is deallocated in same module it has been allocated.
 
-Since `api_string` primary aims to be suitable to be used in APIs, compilation time is critical, especially because strings tend to be needed everywhere. Therefore you will note some limitations when comparing it to `std::string_view` and `std::string`. For example: no reverse iterator and no possibility to choose a traits class. However, the user can simply create an `std::string_view` from an `api_string` object, or use or use some other parts of `std`, to achieve the missing functionalities.
+The current design tries to minimize compilation times. That's why `char_traits` and reverse iterators are not supported. However, that decision may change since it's prone to debate.
 
-The second purpose of this project is to check whether it is possible to reimplement `std::string` so that it uses the same memory structure of `api_string`. The difference is that `std::string` would always keep unique ownership to safely provide mutable access to the individual characters. This way, after the user finishes the composition of the `std::string` content, it could be moved into an `api_string` without memory allocation and copy, leaving the original `std::string` object empty. After being moved, the content gets shared ownership, and lost mutable access.
+The second purpose of this project is to check whether it is possible to reimplement `std::string` so that it uses the same memory structure of `api_string`. The difference is that `std::string` would always keep unique ownership to safely provide mutable access to the individual characters. This way, after the user finishes the composition of the `std::string` content, it could be moved into an `api_string` without memory allocation nor copy, leaving the original `std::string` object empty. After being moved to an `api_string`, the content gets shared ownership, and lost mutable access.
 
 ---
 # The headers
-There are two public headers in this repository: `api_string.hpp` and `string.hpp`. everithing is inside the `speudo_std` namespace. **Note:** This is _not_ a header-only library. To build the library there is one sole source file to compile: `source/api_string.cpp`.
+There are two public headers in this repository: `api_string.hpp` and `string.hpp`. everything is inside the `speudo_std` namespace. **Note:** This is _not_ a header-only library. To build the library there is one sole source file to compile: `source/api_string.cpp`.
 
 ## The header `api_string.hpp` header
 
@@ -67,7 +68,7 @@ public:
     basic_api_string& operator=(const basic_api_string& other) noexcept;
     basic_api_string& operator=(basic_api_string&& other) noexcept;
     basic_api_string& operator=(const CharT* str);
-    constexpr void swap(basic_api_string& other) noexcept;
+    constexpr void swap(basic_api_string& other) noexcept(/*...*/);
     void clear();
 
     // Capacity
@@ -97,7 +98,21 @@ public:
     bool ends_with(const CharT* x) const;
 };
 
+using api_string    = basic_api_string<char>;
+using api_u16string = basic_api_string<char16_t>;
+using api_u32string = basic_api_string<char32_t>;
+using api_wstring   = basic_api_string<wchar_t>;
+
 template <class CharT> basic_api_string<CharT> api_string_ref(const CharT* s);
+
+namespace string_literals {
+
+constexpr api_string    operator "" _as(const char* str, size_t len) noexcept;
+constexpr api_u16string operator "" _as(const char16_t* str, size_t len) noexcept;
+constexpr api_u32string operator "" _as(const char32_t* str, size_t len) noexcept;
+constexpr api_wstring   operator "" _as(const wchar_t* str, size_t len) noexcept;
+
+} // namespace string_literals
 
 template <class CharT> bool operator==(const basic_api_string<CharT>&, const basic_api_string<CharT>&);
 template <class CharT> bool operator!=(const basic_api_string<CharT>&, const basic_api_string<CharT>&);
@@ -120,10 +135,6 @@ template <class CharT> bool operator<=(const basic_api_string<CharT>&, const Cha
 template <class CharT> bool operator> (const basic_api_string<CharT>&, const CharT*);
 template <class CharT> bool operator>=(const basic_api_string<CharT>&, const CharT*);
 
-using api_string    = basic_api_string<char>;
-using api_u16string = basic_api_string<char16_t>;
-using api_u32string = basic_api_string<char32_t>;
-using api_wstring   = basic_api_string<wchar_t>;
 }
 
 ```
