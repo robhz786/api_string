@@ -5,15 +5,16 @@
 
 # Introduction
 
-Almost every API contain some functions that receive or return strings. Yet, the C++ standard does not provide any good solution to transfer strings across modules boundaries. While `std::basic_string` does not have a standard ABI, raw strings and `std::basic_string_view` are not able manage heap allocated memory.
+Almost every API contains some functions that receive or return strings. Yet, the C++ standard does not provide any good solution to transfer strings across modules boundaries. While `std::basic_string` does not have a standard ABI, raw strings and `std::basic_string_view` are not able to manage heap allocated memory.
 
-The purpose of this project is to persuade the addition into the C++ Standard Library of a new string type with a standard ABI that could safely cross module boundaries carrying dynamically allocated memory. The proposed solution uses reference counting to manage and immutable array of characters. Kind of `std::shared_ptr<const char[]>`.
+The purpose of this project is to persuade the addition into the C++ Standard Library of a new string type with a standard ABI that could safely cross module boundaries carrying dynamically allocated memory. The proposed solution uses reference counting to manage and an immutable array of characters. Kind of `std::shared_ptr<const char[]>`.
 
 The `basic_api_string` class template aims to prove the concept. Its notable characteristics are:
 
-- Copy constructor is always fast and never throws.
-- Header file is fast to compile.
+- Its copy constructor is always fast and never throws.
+- Its header file is fast to compile.
 - It supports small string optimisation.
+- `c_str()` member function that returns a null-terminated raw string.`basic_string` class template, whose interface is basically the same as of `std::basic_string`.
 - `c_str()` member function that returns a null terminated raw string.
 - The user can create an `basic_api_string` object from a string literal without any memory allocating ( either by using `operator "" _as` or `api_string_ref` ).
 - Can safely cross modules boundaries, because:
@@ -149,7 +150,7 @@ template <class CharT> bool operator>=(const basic_api_string<CharT>&, const Cha
 
 The constructor that takes `basic_api_string<CharT>&&` exist because it could use the following optimization: if the reference count of `s` is equal to one, then its content could just be moved.
 
-When an `basic_string` object is converted to `basic_api_string`, the allocator of the `basic_string` ( or a rebinded copy ) is stored together with the reference counter so that it will be further  used for the destroction and deallocation.
+When a `basic_string` object is converted to `basic_api_string`, the allocator of the `basic_string` ( or a rebound copy ) is stored together with the reference counter so that it is further used for the destruction and deallocation.
 
 
 ```c++
@@ -263,13 +264,12 @@ struct api_string_mem_base
     std::byte* end()      { return func_table->end(this); }
 };
 
+```
 * `adquire()` increments the reference counter, and returns the previous value
 * `release()` decrements the reference counter and, if it becames zero, deallocates the memory.
 * `unique()` tells whether the reretence countes is equal to one.
 * `begin()` and `end()` return the memory region that contains the string. 
 
-
-```
 For example, the `basic_api_string<CharT>::clear()` function could be implemented like this:
 
 ```c++
