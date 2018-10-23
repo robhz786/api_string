@@ -180,7 +180,7 @@ public:
 
     ~basic_string()
     {
-        if(_big())
+        if (_big())
         {
             _data.big.mem_manager->release();
         }
@@ -815,7 +815,7 @@ private:
 
     constexpr void _reset_data()
     {
-        if(sizeof(_data.big) > sizeof(_data.small))
+        if (sizeof(_data.big) > sizeof(_data.small))
         {
             _data.big = {0};
         }
@@ -866,17 +866,17 @@ basic_string<CharT, Traits, Allocator>::basic_string
     , const Allocator& alloc )
     : basic_string(alloc)
 {
-    if(pos < other.size())
+    if (pos < other.size())
     {
         assign(&other[pos], other.size() - pos);
     }
-    else if(pos > other.size())
+    else if (pos > other.size())
     {
         _detail::throw_std_out_of_range("basic_string::basic_string: pos > other.size()");
     }
 }
 
-template <typename CharT, typename Traits, typename Allocator>
+template<typename CharT, typename Traits, typename Allocator>
 basic_string<CharT, Traits, Allocator>::basic_string
     ( const basic_string& other
     , size_type pos
@@ -884,11 +884,11 @@ basic_string<CharT, Traits, Allocator>::basic_string
     , const Allocator& alloc )
     : basic_string(alloc)
 {
-    if(pos < other.size())
+    if (pos < other.size())
     {
         assign(&other[pos], count);
     }
-    else if(pos > other.size())
+    else if (pos > other.size())
     {
         _detail::throw_std_out_of_range("basic_string::basic_string: pos > other.size()");
     }
@@ -902,19 +902,28 @@ basic_string<CharT, Traits, Allocator>::basic_string
 {
     auto& other_data = reinterpret_cast<abi::api_string_data<CharT>&>(other);
 
-    if( other_data.big.str != nullptr
-     && other_data.big.mem_manager != nullptr
-     && other_data.big.mem_manager->unique() )
+    if (other_data.big.str != nullptr)
     {
-        _data.big.len = other_data.big.len;
-        _data.big.mem_manager = other_data.big.mem_manager;
-        _data.big.str = const_cast<CharT*>(other_data.big.str);
-        _data.big.capacity = other_data.big.mem_manager->bytes_capacity() / sizeof(CharT) - 1;
-        other_data = speudo_std::abi::api_string_data<CharT> {};
+        if ( other_data.big.mem_manager != nullptr
+          && other_data.big.mem_manager->unique() )
+        {
+            _data.big.len = other_data.big.len;
+            _data.big.mem_manager = other_data.big.mem_manager;
+            _data.big.str = const_cast<CharT*>(other_data.big.str);
+            auto end = reinterpret_cast<const CharT*>(other_data.big.mem_manager->end());
+            _data.big.capacity = end - other_data.big.str;
+            other_data = speudo_std::abi::api_string_data<CharT> {};
+        }
+        else
+        {
+            assign(other_data.big.str, other_data.big.len);
+        }
     }
-    else if( ! other.empty())
+    else // short string
     {
-        assign(&other[0], other.size());
+        static_assert(sizeof(other_data) <= sizeof(_data));
+        reinterpret_cast<decltype(other_data.small)&>(_data) = other_data.small;
+        //std::memset(&_data, &other_data, sizeof(other_data.small));
     }
 }
 
@@ -929,7 +938,7 @@ basic_string<CharT, Traits, Allocator>::assign
     {
         assign(&other[pos], std::min(other.size() - pos, count));
     }
-    else if(pos > other.size())
+    else if (pos > other.size())
     {
         _detail::throw_std_out_of_range("basic_string::basic_string: pos > other.size()");
     }
@@ -942,9 +951,9 @@ basic_string<CharT, Traits, Allocator>&
 basic_string<CharT, Traits, Allocator>::assign(basic_string&& other)
 {
     _move_allocator(other, _prop_alloc_on_move_assignment{});
-    if(other._big())
+    if (other._big())
     {
-        if(_big())
+        if (_big())
         {
             _data.big.mem_manager->release();
         }
@@ -968,11 +977,11 @@ template <typename CharT, typename Traits, typename Allocator>
 basic_string<CharT, Traits, Allocator>&
 basic_string<CharT, Traits, Allocator>::assign(const CharT* s, size_type count)
 {
-    if(count > capacity())
+    if (count > capacity())
     {
         _replace_memory(s, count, 2*count);
     }
-    else if(_small())
+    else if (_small())
     {
         _data.small.len = count;
         Traits::copy(_data.small.str, s, count);
@@ -1010,9 +1019,9 @@ const CharT& basic_string<CharT, Traits, Allocator>::at(size_type pos) const
 template <typename CharT, typename Traits, typename Allocator>
 void basic_string<CharT, Traits, Allocator>::resize(size_type count, CharT ch)
 {
-    if(count < size())
+    if (count < size())
     {
-        if(_big())
+        if (_big())
         {
             _data.big.len = count;
             Traits::assign(_data.big.str[count], CharT{});
@@ -1032,7 +1041,7 @@ void basic_string<CharT, Traits, Allocator>::resize(size_type count, CharT ch)
 template <typename CharT, typename Traits, typename Allocator>
 void basic_string<CharT, Traits, Allocator>::shrink_to_fit()
 {
-    if(_big())
+    if (_big())
     {
         constexpr size_type min_capacity_diff =
             sizeof(speudo_std::_detail::api_string_mem<Allocator>)
@@ -1043,7 +1052,7 @@ void basic_string<CharT, Traits, Allocator>::shrink_to_fit()
             basic_string tmp{_data.big.str, _data.big.len};
             swap(tmp);
         }
-        else if(_data.big.capcity - _data.big.len > min_capacity_diff)
+        else if (_data.big.capcity - _data.big.len > min_capacity_diff)
         {
             _replace_memory(_data.big.str, _data.big.len, _data.big.len);
         }
@@ -1054,7 +1063,7 @@ template <typename CharT, typename Traits, typename Allocator>
 inline void basic_string<CharT, Traits, Allocator>::clear()
 {
     _data.big.len = 0;
-    if(_big())
+    if (_big())
     {
         _data.big.str[0] = 0;
     }
@@ -1105,7 +1114,7 @@ basic_string<CharT, Traits, Allocator>::_move_to_api_string() &&
 template <typename CharT, typename Traits, typename Allocator>
 CharT basic_string<CharT, Traits, Allocator>::pop_back()
 {
-    if(_big())
+    if (_big())
     {
         if (_data.big.len > 0)
         {
@@ -1128,7 +1137,7 @@ template <typename CharT, typename Traits, typename Allocator>
 void basic_string<CharT, Traits, Allocator>::push_back(CharT ch)
 {
     _grow_cap_if_necessary_for(1);
-    if(_big())
+    if (_big())
     {
         Traits::assign(_data.big.str[_data.big.len + 1], CharT());
         Traits::assign(_data.big.str[_data.big.len], ch);
@@ -1148,7 +1157,7 @@ basic_string<CharT, Traits, Allocator>&
 basic_string<CharT, Traits, Allocator>::append(size_type count, CharT ch)
 {
     _grow_cap_if_necessary_for(count);
-    if(_big())
+    if (_big())
     {
         Traits::assign(_data.big.str, count, ch);
         Traits::assign(_data.big.str[_data.big.len + count], CharT());
@@ -1168,7 +1177,7 @@ basic_string<CharT, Traits, Allocator>&
 basic_string<CharT, Traits, Allocator>::append(const CharT* s, size_type count)
 {
     _grow_cap_if_necessary_for(count);
-    if(_big())
+    if (_big())
     {
         Traits::assign(_data.big.str[_data.big.len + count], CharT());
         Traits::copy(_data.big.str + _data.big.len, s, count);
@@ -1205,7 +1214,7 @@ void basic_string<CharT, Traits, Allocator>::_replace_memory
 
     data_type new_data;
     new_data.big.len = new_len;
-    new_data.big.capacity = m.bytes_capacity / sizeof(CharT) - 1;
+    new_data.big.capacity = m.pool_size / sizeof(CharT) - 1;
     new_data.big.mem_manager = m.manager;
     new_data.big.str = reinterpret_cast<CharT*>(m.pool);
     Traits::copy(new_data.big.str, new_str, new_len);
@@ -1284,11 +1293,11 @@ basic_string<CharT,Traits,Alloc> operator+
     ( const basic_string<CharT,Traits,Alloc>& lhs
     , basic_string<CharT,Traits,Alloc>&& rhs )
 {
-    if( ! lhs.empty())
+    if ( ! lhs.empty())
     {
-        if(rhs.empty())
+        if (rhs.empty())
         {
-            if(rhs.capacity() >= lhs.size())
+            if (rhs.capacity() >= lhs.size())
             {
                 return std::move(rhs.append(lhs));
             }
@@ -1308,7 +1317,7 @@ basic_string<CharT,Traits,Alloc> operator+
     , basic_string<CharT,Traits,Alloc>&& rhs )
 {
     std::size_t len = lhs.length() + rhs.length();
-    if(lhs.capacity() >= len || rhs.capacity() < len)
+    if (lhs.capacity() >= len || rhs.capacity() < len)
     {
         return std::move(lhs.append(rhs));
     }

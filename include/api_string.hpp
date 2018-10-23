@@ -26,25 +26,28 @@ struct api_string_mem_base;
 
 struct api_string_func_table
 {
-    typedef void(*func_void)(speudo_std::abi::api_string_mem_base*);
-    typedef bool(*func_bool)(speudo_std::abi::api_string_mem_base*);
-    typedef std::size_t(*func_size)(speudo_std::abi::api_string_mem_base*);
+    typedef std::size_t (*func_size)(speudo_std::abi::api_string_mem_base*);
+    typedef void        (*func_void)(speudo_std::abi::api_string_mem_base*);
+    typedef bool        (*func_bool)(speudo_std::abi::api_string_mem_base*);
+    typedef std::byte*  (*func_ptr) (speudo_std::abi::api_string_mem_base*);
 
     unsigned long abi_version = 0;
-    func_void adquire = nullptr;
+    func_size adquire = nullptr;
     func_void release = nullptr;
-    func_bool unique = nullptr;
-    func_size bytes_capacity = nullptr;
+    func_bool unique  = nullptr;
+    func_ptr  begin   = nullptr;
+    func_ptr  end     = nullptr;
 };
 
 struct api_string_mem_base
 {
     const speudo_std::abi::api_string_func_table* const func_table;
 
-    void adquire() { func_table->adquire(this); }
-    void release() { func_table->release(this); }
-    bool unique()  { return func_table->unique(this); }
-    std::size_t bytes_capacity() { return func_table->bytes_capacity(this); }
+    std::size_t adquire() { return func_table->adquire(this); }
+    void release()        { func_table->release(this); }
+    bool unique()         { return func_table->unique(this); }
+    std::byte* begin()    { return func_table->begin(this); }
+    std::byte* end()      { return func_table->end(this); }
 };
 
 
