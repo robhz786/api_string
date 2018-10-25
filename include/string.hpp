@@ -983,7 +983,7 @@ basic_string<CharT, Traits, Allocator>::assign(const CharT* s, size_type count)
     }
     else if (_small())
     {
-        _data.small.len = count;
+        _data.small.len = static_cast<unsigned char>(count);
         Traits::copy(_data.small.str, s, count);
         Traits::assign(_data.small.str[count], CharT{});
     }
@@ -1167,7 +1167,7 @@ basic_string<CharT, Traits, Allocator>::append(size_type count, CharT ch)
     {
         Traits::assign(_data.small.str, count, ch);
         Traits::assign(_data.small.str[_data.small.len + count], CharT());
-        _data.small.len += count;
+        _data.small.len += static_cast<unsigned char>(count);
     }
     return *this;
 }
@@ -1187,7 +1187,7 @@ basic_string<CharT, Traits, Allocator>::append(const CharT* s, size_type count)
     {
         Traits::assign(_data.small.str[_data.small.len + count], CharT());
         Traits::copy(_data.small.str + _data.small.len, s, count);
-        _data.small.len += count;
+        _data.small.len += static_cast<unsigned char>(count);
     }
     return *this;
 }

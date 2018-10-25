@@ -42,8 +42,7 @@ class alignas(speudo_std::_detail::api_string_mem_alignment) api_string_mem
     using rebinded_allocator_traits
         = std::allocator_traits<rebinded_allocator_type>;
 
-    using size_type = typename Allocator::size_type;
-    using allocator_type = Allocator;
+    using size_type = typename rebinded_allocator_traits::size_type;
 
 public:
 

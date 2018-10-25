@@ -10,6 +10,7 @@ option(API_STRING_TEST "Generate tests" ON)
 
 if (API_STRING_TEST)
 
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
   add_subdirectory(googletest)
 
   add_library(api_string_test_mode STATIC source/api_string.cpp)

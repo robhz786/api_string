@@ -490,7 +490,7 @@ TYPED_TEST(basic_fixture, assign_copy_with_allocator)
         big_str_2 = big_str_1;
         EXPECT_EQ(big_str_2.get_allocator(), a1);
         EXPECT_EQ(big_str_2, big_str_1);
-        EXPECT_GE(log1.allocations_count(), 1);
+        EXPECT_GE(log1.allocations_count(), 1u);
         EXPECT_EQ(log2.allocations_count(), 1);
     }
     {   // from big to less big
@@ -504,7 +504,7 @@ TYPED_TEST(basic_fixture, assign_copy_with_allocator)
         big_str_2 = big_str_1;
         EXPECT_EQ(big_str_2.get_allocator(), a1);
         EXPECT_EQ(big_str_2, big_str_1);
-        EXPECT_GE(log1.allocations_count(), 1);
+        EXPECT_GE(log1.allocations_count(), 1u);
         EXPECT_EQ(log2.allocations_count(), 1);
     }
 }

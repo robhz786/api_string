@@ -75,7 +75,7 @@ inline int do_compare
     , const CharT* rhs
     , std::size_t rhs_len)
 {
-    std::size_t min_len = std::min(lhs_len, rhs_len);
+    std::size_t min_len = lhs_len > rhs_len ? lhs_len : rhs_len;
     int cmp = std::char_traits<CharT>::compare(lhs, rhs, min_len);
     return cmp != 0 ? cmp : (lhs_len == rhs_len ? 0 : (lhs_len < rhs_len? -1 : +1));
 }
