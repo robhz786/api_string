@@ -104,7 +104,7 @@ private:
         return *this;
     }
 
-    static std::size_t adquire(api_string_mem_base* mem_base)
+    static std::size_t acquire(api_string_mem_base* mem_base)
     {
         auto* self = static_cast<api_string_mem*>(mem_base);
         return self->_refcount.fetch_add(1, std::memory_order_relaxed);
@@ -139,7 +139,7 @@ private:
     static const speudo_std::abi::api_string_func_table* get_table()
     {
         static const speudo_std::abi::api_string_func_table table =
-            {0, adquire, release, unique, begin, end};
+            {0, acquire, release, unique, begin, end};
         return & table;
     }
 

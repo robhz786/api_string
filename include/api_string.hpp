@@ -5,7 +5,6 @@
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 
-
 #include <cstddef>
 
 namespace speudo_std {
@@ -32,7 +31,7 @@ struct api_string_func_table
     typedef std::byte*  (*func_ptr) (speudo_std::abi::api_string_mem_base*);
 
     unsigned long abi_version = 0;
-    func_size adquire = nullptr;
+    func_size acquire = nullptr;
     func_void release = nullptr;
     func_bool unique  = nullptr;
     func_ptr  begin   = nullptr;
@@ -43,7 +42,7 @@ struct api_string_mem_base
 {
     const speudo_std::abi::api_string_func_table* const func_table;
 
-    std::size_t adquire() { return func_table->adquire(this); }
+    std::size_t acquire() { return func_table->acquire(this); }
     void release()        { func_table->release(this); }
     bool unique()         { return func_table->unique(this); }
     std::byte* begin()    { return func_table->begin(this); }
@@ -169,10 +168,10 @@ int str_compare
 
 void throw_std_out_of_range(const char*);
 
+struct api_string_ref_tag {};
+
 } // namespace _detail
 
-
-struct api_string_ref_tag {};
 
 template <typename CharT> class basic_api_string;
 
@@ -203,7 +202,7 @@ public:
     basic_api_string(const basic_api_string& other) noexcept
         : _data(other._data)
     {
-        _adquire();
+        _acquire();
     }
 
     basic_api_string(basic_api_string&& other) noexcept
@@ -223,13 +222,6 @@ public:
     basic_api_string(const CharT* str)
         : basic_api_string(str, speudo_std::_detail::str_length(str))
     {
-    }
-
-    constexpr basic_api_string(speudo_std::api_string_ref_tag, const CharT* str)
-    {
-        _data.big.len = speudo_std::_detail::str_length(str);
-        _data.big.mem_manager = nullptr;
-        _data.big.str = str;
     }
 
     ~basic_api_string()
@@ -442,8 +434,8 @@ public:
 
 private:
 
-    constexpr basic_api_string
-        ( speudo_std::api_string_ref_tag
+    basic_api_string
+        ( speudo_std::_detail::api_string_ref_tag
         , const CharT* str
         , std::size_t len )
     {
@@ -453,7 +445,7 @@ private:
     }
 
     template <typename C>
-    friend basic_api_string<C>  _detail::api_string_ref(const C* str, std::size_t);
+    friend basic_api_string<C> api_string_ref(const C* str, std::size_t);
 
     const_pointer _data_end() const
     {
@@ -467,11 +459,11 @@ private:
         return _big() && _data.big.mem_manager != nullptr;
     }
 
-    void _adquire()
+    void _acquire()
     {
         if(_is_managed())
         {
-            _data.big.mem_manager->adquire();
+            _data.big.mem_manager->acquire();
         }
     }
 
@@ -505,38 +497,34 @@ using api_u32string = basic_api_string<char32_t>;
 using api_wstring   = basic_api_string<wchar_t>;
 
 template <typename CharT>
-constexpr speudo_std::basic_api_string<CharT> api_string_ref(const CharT* str)
-{
-    return {speudo_std::api_string_ref_tag{}, str};
-}
-
-namespace _detail {
-
-template <typename CharT>
 inline basic_api_string<CharT> api_string_ref(const CharT* str, std::size_t len)
 {
-    return {speudo_std::api_string_ref_tag{}, str, len};
+    return {speudo_std::_detail::api_string_ref_tag{}, str, len};
 }
 
+template <typename CharT>
+inline speudo_std::basic_api_string<CharT> api_string_ref(const CharT* str)
+{
+    return speudo_std::api_string_ref(str, _detail::str_length(str));
 }
 
 namespace string_literals {
 
 inline api_string operator ""_as(const char* str, std::size_t len)
 {
-    return speudo_std::_detail::api_string_ref(str, len);
+    return speudo_std::api_string_ref(str, len);
 }
 inline api_u16string operator ""_as(const char16_t* str, std::size_t len)
 {
-    return speudo_std::_detail::api_string_ref(str, len);
+    return speudo_std::api_string_ref(str, len);
 }
 inline api_u32string operator ""_as(const char32_t* str, std::size_t len)
 {
-    return speudo_std::_detail::api_string_ref(str, len);
+    return speudo_std::api_string_ref(str, len);
 }
 inline api_wstring operator ""_as(const wchar_t* str, std::size_t len)
 {
-    return speudo_std::_detail::api_string_ref(str, len);
+    return speudo_std::api_string_ref(str, len);
 }
 
 } // namespace string_literals
